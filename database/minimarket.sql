@@ -8,27 +8,21 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
--- --------------------------------------------------------
 -- Estructura de tabla para `cache`
--- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "cache" (
   "key" varchar(255) PRIMARY KEY,
   "value" text NOT NULL,
   "expiration" int NOT NULL
 );
 
--- --------------------------------------------------------
 -- Estructura de tabla para `cache_locks`
--- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "cache_locks" (
   "key" varchar(255) PRIMARY KEY,
   "owner" varchar(255) NOT NULL,
   "expiration" int NOT NULL
 );
 
--- --------------------------------------------------------
 -- Estructura de tabla para `categorias`
--- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "categorias" (
   "id" SERIAL PRIMARY KEY,
   "nombre" varchar(255) NOT NULL,
@@ -36,20 +30,23 @@ CREATE TABLE IF NOT EXISTS "categorias" (
   "updated_at" timestamp NULL
 );
 
-INSERT INTO "categorias" ("id", "nombre", "created_at", "updated_at") VALUES
-(1, 'Aseo', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(2, 'Granos', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(3, 'Frutas', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(4, 'Bebidas', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(5, 'Lácteos', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(6, 'Carnes', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(7, 'Enlatados', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(8, 'Snacks', '2026-03-20 00:12:15', '2026-03-20 00:12:15'),
-(9, 'Ofertas', '2026-03-20 00:12:15', '2026-03-20 00:12:15');
+-- Estructura de tabla para `usuarios`
+CREATE TABLE IF NOT EXISTS "usuarios" (
+  "id" SERIAL PRIMARY KEY,
+  "nombre" varchar(255) NOT NULL,
+  "email" varchar(255) UNIQUE NOT NULL,
+  "password" varchar(255) NOT NULL,
+  "rol" varchar(50) DEFAULT 'admin',
+  "created_at" timestamp NULL,
+  "updated_at" timestamp NULL
+);
 
--- --------------------------------------------------------
+-- INSERTAR USUARIO (admin@admin.com / admin123)
+INSERT INTO "usuarios" ("nombre", "email", "password", "created_at", "updated_at") 
+VALUES ('Administrador', 'admin@admin.com', '$2y$12$OioqLs0K0BwsfoJkLLLyMERxAIpSX/InVtK0fDPkDVM.Jk6L4iR7q', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
 -- Estructura de tabla para `productos`
--- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "productos" (
   "id" SERIAL PRIMARY KEY,
   "codigo_barras" varchar(50) DEFAULT NULL,
@@ -58,48 +55,43 @@ CREATE TABLE IF NOT EXISTS "productos" (
   "precio_venta" decimal(10,2) DEFAULT '0.00',
   "descripcion" text,
   "stock" int NOT NULL,
-  "categoria_id" bigint DEFAULT NULL,
+  "categoria_id" bigint REFERENCES "categorias"("id") ON DELETE SET NULL,
   "imagen" text,
   "created_at" timestamp NULL,
   "updated_at" timestamp NULL
 );
 
-INSERT INTO "productos" ("id", "codigo_barras", "nombre", "precio_compra", "precio_venta", "descripcion", "stock", "categoria_id", "imagen", "created_at", "updated_at") VALUES
-(1, NULL, 'Arroz Roa', 2000.00, 2400.00, 'Producto de alta calidad', 10, 2, 'https://url-imagen...', '2026-03-26 05:56:54', '2026-03-28 05:34:19'),
-(2, NULL, 'Arroz Diana', 2200.00, 2640.00, 'Producto de alta calidad', 25, 2, 'https://url-imagen...', '2026-03-26 05:56:54', '2026-03-28 05:33:52');
-
--- --------------------------------------------------------
--- Estructura de tabla para `egresos`
--- --------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "egresos" (
+-- Estructura de tabla para `ventas`
+CREATE TABLE IF NOT EXISTS "ventas" (
   "id" SERIAL PRIMARY KEY,
-  "monto" decimal(10,2) NOT NULL,
-  "descripcion" varchar(255) NOT NULL,
-  "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
+  "total" decimal(10,2) NOT NULL,
+  "usuario_id" bigint REFERENCES "usuarios"("id"),
+  "created_at" timestamp NULL,
+  "updated_at" timestamp NULL
 );
 
-INSERT INTO "egresos" ("id", "monto", "descripcion", "created_at", "updated_at") VALUES
-(1, 3600.00, 'Pago arroz', '2026-03-27 18:27:21', '2026-03-27 18:27:21'),
-(3, 5000.00, 'Gasto aseo', '2026-03-28 00:35:26', '2026-03-28 00:35:26');
-
--- --------------------------------------------------------
--- Estructura de tabla para `logs`
--- --------------------------------------------------------
-CREATE TABLE IF NOT EXISTS "logs" (
+-- Estructura de tabla para `detalle_ventas`
+CREATE TABLE IF NOT EXISTS "detalle_ventas" (
   "id" SERIAL PRIMARY KEY,
-  "usuario_id" int DEFAULT NULL,
-  "accion" varchar(100) DEFAULT NULL,
-  "descripcion" text,
-  "ip_origen" varchar(45) DEFAULT NULL,
-  "fecha_registro" timestamp DEFAULT CURRENT_TIMESTAMP,
-  "created_at" timestamp NULL
+  "venta_id" bigint REFERENCES "ventas"("id") ON DELETE CASCADE,
+  "producto_id" bigint REFERENCES "productos"("id"),
+  "cantidad" int NOT NULL,
+  "precio_unitario" decimal(10,2) NOT NULL,
+  "subtotal" decimal(10,2) NOT NULL
 );
 
--- (Puedes añadir aquí el resto de tus INSERTS de logs si son necesarios)
+-- Estructura de tabla para `sessions` (VITAL PARA EVITAR ERROR 500)
+CREATE TABLE IF NOT EXISTS "sessions" (
+  "id" varchar(255) PRIMARY KEY,
+  "user_id" bigint DEFAULT NULL,
+  "ip_address" varchar(45) DEFAULT NULL,
+  "user_agent" text,
+  "payload" text NOT NULL,
+  "last_activity" int NOT NULL
+);
 
--- Ajustar las secuencias (Importante en Postgres para que los próximos IDs funcionen)
+-- Ajustar las secuencias para que los IDs automáticos no fallen
 SELECT setval(pg_get_serial_sequence('categorias', 'id'), coalesce(max(id), 1)) FROM categorias;
+SELECT setval(pg_get_serial_sequence('usuarios', 'id'), coalesce(max(id), 1)) FROM usuarios;
 SELECT setval(pg_get_serial_sequence('productos', 'id'), coalesce(max(id), 1)) FROM productos;
-SELECT setval(pg_get_serial_sequence('egresos', 'id'), coalesce(max(id), 1)) FROM egresos;
-SELECT setval(pg_get_serial_sequence('logs', 'id'), coalesce(max(id), 1)) FROM logs;
+SELECT setval(pg_get_serial_sequence('ventas', 'id'), coalesce(max(id), 1)) FROM ventas;
