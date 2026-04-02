@@ -40,16 +40,14 @@ class AdminController extends Controller implements HasMiddleware
 
         /**
          * 3. Suma de ventas totales de HOY
-         * Importante: Usamos 'created_at' que es el estándar de Laravel. 
-         * Si en tu tabla ventas se llama 'fecha', cámbialo abajo.
+         * CORREGIDO: Se cambió 'created_at' por 'fecha' para evitar el error SQLSTATE[42703]
          */
         $ventasHoy = DB::table('ventas')
-            ->whereDate('created_at', Carbon::today())
+            ->whereDate('fecha', Carbon::today()) 
             ->sum('total');
 
         /**
          * 4. Estado de la caja
-         * Verifica que la tabla 'sesiones_caja' exista en Render.
          */
         $cajaAbierta = DB::table('sesiones_caja')
             ->where('estado', 'abierta')
@@ -63,19 +61,26 @@ class AdminController extends Controller implements HasMiddleware
     }
 
     /**
-     * BUSCAR PRODUCTOS (Corregido para PostgreSQL con ILIKE)
-     * Esta función permite buscar por ID, Nombre o Código de Barras
+     * BUSCAR PRODUCTOS (Optimizado para PostgreSQL en Render)
      */
     public function buscarProducto(Request $request)
     {
         $term = $request->texto;
 
-        // Usamos ILIKE para que no importe si escribes en mayúsculas o minúsculas en Render
-        $productos = DB::table('productos')
-            ->where('id', 'LIKE', $term) 
-            ->orWhere('nombre', 'ILIKE', '%' . $term . '%')
-            ->orWhere('codigo_barras', 'ILIKE', '%' . $term . '%')
-            ->get();
+        /**
+         * Usamos ILIKE para ignorar mayúsculas/minúsculas.
+         * Se añade validación is_numeric para evitar errores de tipo en la columna 'id' de Postgres.
+         */
+        $query = DB::table('productos');
+
+        if (is_numeric($term)) {
+            $query->where('id', $term);
+        } else {
+            $query->where('nombre', 'ILIKE', '%' . $term . '%')
+                  ->orWhere('codigo_barras', 'ILIKE', '%' . $term . '%');
+        }
+
+        $productos = $query->get();
 
         return response()->json($productos);
     }
