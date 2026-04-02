@@ -38,14 +38,19 @@ class AdminController extends Controller implements HasMiddleware
         // 2. Conteo de clientes (usuarios con rol cliente)
         $totalClientes = DB::table('usuarios')->where('rol', 'cliente')->count();
 
-        // 3. Suma de ventas totales de HOY
-        // Se cambió 'created_at' por 'fecha' según la estructura de tu tabla
+        /**
+         * 3. Suma de ventas totales de HOY
+         * Importante: Usamos 'created_at' que es el estándar de Laravel. 
+         * Si en tu tabla ventas se llama 'fecha', cámbialo abajo.
+         */
         $ventasHoy = DB::table('ventas')
-            ->whereDate('fecha', Carbon::today())
+            ->whereDate('created_at', Carbon::today())
             ->sum('total');
 
-        // 4. Estado de la caja
-        // Se cambió 'cajas' por 'sesiones_caja' según tu SQL
+        /**
+         * 4. Estado de la caja
+         * Verifica que la tabla 'sesiones_caja' exista en Render.
+         */
         $cajaAbierta = DB::table('sesiones_caja')
             ->where('estado', 'abierta')
             ->exists();
@@ -55,6 +60,24 @@ class AdminController extends Controller implements HasMiddleware
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', 'Sat, 01 Jan 1990 00:00:00 GMT');
+    }
+
+    /**
+     * BUSCAR PRODUCTOS (Corregido para PostgreSQL con ILIKE)
+     * Esta función permite buscar por ID, Nombre o Código de Barras
+     */
+    public function buscarProducto(Request $request)
+    {
+        $term = $request->texto;
+
+        // Usamos ILIKE para que no importe si escribes en mayúsculas o minúsculas en Render
+        $productos = DB::table('productos')
+            ->where('id', 'LIKE', $term) 
+            ->orWhere('nombre', 'ILIKE', '%' . $term . '%')
+            ->orWhere('codigo_barras', 'ILIKE', '%' . $term . '%')
+            ->get();
+
+        return response()->json($productos);
     }
 
     /**
