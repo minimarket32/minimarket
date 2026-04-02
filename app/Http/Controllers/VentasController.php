@@ -15,6 +15,10 @@ class VentasController extends Controller
         return view('ventas');
     }
 
+    /**
+     * Buscar productos para el POS
+     * Corregido para PostgreSQL (Render)
+     */
     public function buscarProducto(Request $request) {
         $term = $request->query('term');
         
@@ -22,21 +26,17 @@ class VentasController extends Controller
             return response()->json(['success' => true, 'productos' => []]);
         }
 
-        /**
-         * CORRECCIÓN PARA POSTGRESQL:
-         * 1. Usamos ILIKE en lugar de LIKE para ignorar mayúsculas/minúsculas.
-         * 2. Agrupamos los OR en una función anónima para que el filtro de stock > 0 se aplique siempre.
-         */
+        // Usamos ILIKE para búsquedas que ignoren mayúsculas/minúsculas en Postgres
         $productos = Producto::where(function($query) use ($term) {
                         $query->where('nombre', 'ILIKE', "%{$term}%")
                               ->orWhere('codigo_barras', 'ILIKE', "%{$term}%");
                         
-                        // Solo buscamos por ID si el término es numérico para evitar errores en Postgres
+                        // Solo buscamos por ID si el término es un número para evitar errores de tipo en Postgres
                         if (is_numeric($term)) {
                             $query->orWhere('id', $term);
                         }
                     })
-                    ->where('stock', '>', 0) // Solo productos con existencia
+                    ->where('stock', '>', 0) // Solo productos con existencias
                     ->take(10)
                     ->get();
 
@@ -46,8 +46,11 @@ class VentasController extends Controller
         ]);
     }
 
+    /**
+     * Guardar la venta y descontar stock
+     */
     public function store(Request $request) {
-        // Verificar si hay una sesión de caja abierta antes de vender
+        // Verificar si hay una sesión de caja abierta
         $sesion = SesionCaja::where('estado', 'abierta')->first();
         if (!$sesion) {
             return response()->json(['success' => false, 'message' => 'No hay una sesión de caja abierta.'], 403);
@@ -59,7 +62,7 @@ class VentasController extends Controller
             $venta = Ventas::create([
                 'usuario_id' => session('usuario_id') ?? 1,
                 'total'      => $request->total,
-                'fecha'      => now()
+                'fecha'      => now() // Asegúrate de que tu tabla tenga la columna 'fecha'
             ]);
 
             foreach ($request->productos as $item) {
